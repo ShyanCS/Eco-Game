@@ -1,0 +1,26 @@
+{
+  "name": "eco-game",
+  "version": "0.1.0",
+  "description": "Durable game economy service — wallet, purchases, and rewards with exactly-once semantics",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate": "node --import tsx src/migrate.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.3.3",
+    "pg": "^8.16.0",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.32",
+    "@types/pg": "^8.15.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}
