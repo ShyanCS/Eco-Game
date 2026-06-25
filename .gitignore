@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+
+# Environment
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Planning / assessment docs (local only)
+BRIEF_*.md
+MASTER_PROMPT.md
+PROJECT_PLAN.md
