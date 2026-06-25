@@ -1,34 +1,43 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { creditRoute } from './routes/credit.js';
+import { getWalletRoute } from './routes/getWallet.js';
 
-const server = Fastify({
-  logger: true,
-});
+/**
+ * Build and configure the Fastify server with all routes.
+ * Separated from start() so tests can use the same server via inject()
+ * without binding to a port.
+ */
+export function buildServer(): FastifyInstance {
+  const server = Fastify({
+    logger: {
+      level: process.env.LOG_LEVEL ?? 'info',
+    },
+  });
 
-// --- Health check ---
-server.get('/health', async () => {
-  return { status: 'ok' };
-});
+  // --- Health check ---
+  server.get('/health', async () => {
+    return { status: 'ok' };
+  });
 
-// --- Stub routes (501 Not Implemented) ---
+  // --- Routes ---
+  creditRoute(server);
+  getWalletRoute(server);
 
-server.post('/v1/wallets/:playerId/credit', async (_request, reply) => {
-  reply.status(501).send({ error: { code: 'not_implemented', message: 'Credit endpoint not yet implemented' } });
-});
+  // --- Stub routes (not yet implemented) ---
+  server.post('/v1/wallets/:playerId/purchase', async (_request, reply) => {
+    reply.status(501).send({ error: { code: 'not_implemented', message: 'Purchase endpoint not yet implemented' } });
+  });
 
-server.post('/v1/wallets/:playerId/purchase', async (_request, reply) => {
-  reply.status(501).send({ error: { code: 'not_implemented', message: 'Purchase endpoint not yet implemented' } });
-});
+  server.post('/v1/rewards/:rewardId/claim', async (_request, reply) => {
+    reply.status(501).send({ error: { code: 'not_implemented', message: 'Claim endpoint not yet implemented' } });
+  });
 
-server.post('/v1/rewards/:rewardId/claim', async (_request, reply) => {
-  reply.status(501).send({ error: { code: 'not_implemented', message: 'Claim endpoint not yet implemented' } });
-});
+  return server;
+}
 
-server.get('/v1/wallets/:playerId', async (_request, reply) => {
-  reply.status(501).send({ error: { code: 'not_implemented', message: 'Get wallet endpoint not yet implemented' } });
-});
-
-// --- Start ---
+// --- Start (only when run directly, not when imported by tests) ---
 const start = async () => {
+  const server = buildServer();
   const host = process.env.HOST ?? '0.0.0.0';
   const port = parseInt(process.env.PORT ?? '3000', 10);
 
@@ -41,6 +50,8 @@ const start = async () => {
   }
 };
 
-start();
-
-export default server;
+// Only start if this file is the entry point
+const isDirectRun = process.argv[1]?.endsWith('server.js') || process.argv[1]?.endsWith('server.ts');
+if (isDirectRun) {
+  start();
+}

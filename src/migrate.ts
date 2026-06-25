@@ -11,7 +11,7 @@ const { Client } = pg;
  * - Each migration runs in its own transaction.
  */
 async function runMigrations() {
-  const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://eco:eco@localhost:5432/eco';
+  const databaseUrl = process.env.DATABASE_URL ?? 'postgresql://eco:eco@localhost:5433/eco';
   const client = new Client({ connectionString: databaseUrl });
 
   await client.connect();
