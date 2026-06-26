@@ -18,7 +18,7 @@ export function buildServer(): FastifyInstance {
   });
 
   // --- Global Error Handler ---
-  server.setErrorHandler((error, request, reply) => {
+  server.setErrorHandler((error: any, request, reply) => {
     if (error.statusCode === 413 || error.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
       return reply.status(413).send({
         error: {
