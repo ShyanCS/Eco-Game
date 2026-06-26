@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { creditRoute } from './routes/credit.js';
 import { purchaseRoute } from './routes/purchase.js';
 import { getWalletRoute } from './routes/getWallet.js';
+import { claimRoute } from './routes/claim.js';
 
 /**
  * Build and configure the Fastify server with all routes.
@@ -24,10 +25,7 @@ export function buildServer(): FastifyInstance {
   creditRoute(server);
   purchaseRoute(server);
   getWalletRoute(server);
-
-  server.post('/v1/rewards/:rewardId/claim', async (_request, reply) => {
-    reply.status(501).send({ error: { code: 'not_implemented', message: 'Claim endpoint not yet implemented' } });
-  });
+  claimRoute(server);
 
   return server;
 }

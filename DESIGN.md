@@ -37,7 +37,7 @@ Error codes used:
 - `400` — validation failure (missing fields, bad types, negative amounts, etc.)
 - `402` — insufficient funds (purchase only)
 - `404` — player not found (GET wallet only)
-- `409` — idempotency key conflict (reuse with different payload, or in-progress)
+- `409` — idempotency key conflict (reuse with different payload, or in-progress), or reward already claimed
 - `501` — endpoint not yet implemented (stub routes during development)
 
 ---
@@ -209,6 +209,38 @@ This is a deliberate choice — alternatives like 400 (malformed request) or
   operations (debit, grant, and ledger) together.
 - If the process crashes after COMMIT → all three are durable, and the
   idempotency record prevents re-execution.
+
+---
+
+## Reward Claiming (Claim-Once)
+
+A reward can only be claimed once per player. This is enforced directly at the database level by the `reward_claims` table using a composite primary key:
+
+```sql
+CREATE TABLE IF NOT EXISTS reward_claims (
+  reward_id  TEXT NOT NULL,
+  player_id  TEXT NOT NULL REFERENCES accounts(player_id),
+  claimed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (reward_id, player_id)
+);
+```
+
+### Flow and Concurrency Safety
+
+1. **Existence check:** We verify if the player exists. If not, return `404 player_not_found`.
+2. **Claim enforcement:** We attempt to record the claim in `reward_claims` using the `ON CONFLICT DO NOTHING` clause:
+   ```sql
+   INSERT INTO reward_claims (reward_id, player_id)
+   VALUES ($1, $2)
+   ON CONFLICT (reward_id, player_id) DO NOTHING
+   RETURNING reward_id;
+   ```
+3. **Collision handling:**
+   - If the insert returns a row, the claim succeeds, and we return `200`.
+   - If the insert returns no rows, the reward has already been claimed by this player. We cleanly return `409 already_claimed`.
+
+### Why `ON CONFLICT DO NOTHING` is Used
+By using `ON CONFLICT DO NOTHING` rather than letting the constraint throw a unique violation exception, we avoid aborting the active Postgres transaction. This ensures the idempotency middleware can cleanly commit and save the `409 already_claimed` response so that future retries of the duplicate claim receive the stored response.
 
 ---
 
