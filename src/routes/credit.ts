@@ -1,5 +1,5 @@
 import { type FastifyInstance } from 'fastify';
-import { withTransaction } from '../db.js';
+import { withIdempotency } from '../idempotency.js';
 
 /**
  * POST /v1/wallets/:playerId/credit
@@ -7,16 +7,17 @@ import { withTransaction } from '../db.js';
  * Adds currency to a player's wallet (simulates a battle payout).
  * Creates the account if it doesn't exist (upsert).
  * Records every credit in the append-only ledger for auditability.
+ *
+ * Wrapped with idempotency: duplicate requests (same Idempotency-Key)
+ * produce the same response without re-applying the credit.
  */
 export async function creditRoute(server: FastifyInstance) {
-  server.post<{
-    Params: { playerId: string };
-    Body: { amount: number; reason: string };
-  }>('/v1/wallets/:playerId/credit', async (request, reply) => {
-    const { playerId } = request.params;
-    const { amount, reason } = request.body;
+  server.post('/v1/wallets/:playerId/credit', withIdempotency(
+    'credit',
+    async (request, _reply, client) => {
+      const { playerId } = request.params as { playerId: string };
+      const { amount, reason } = request.body as { amount: number; reason: string };
 
-    const result = await withTransaction(async (client) => {
       // Upsert the account: create if new, add to balance if existing
       const accountResult = await client.query(
         `INSERT INTO accounts (player_id, balance)
@@ -36,12 +37,13 @@ export async function creditRoute(server: FastifyInstance) {
         [playerId, amount, 'credit', reason]
       );
 
-      return newBalance;
-    });
-
-    return reply.status(200).send({
-      playerId,
-      balance: result,
-    });
-  });
+      return {
+        status: 200,
+        body: {
+          playerId,
+          balance: newBalance,
+        },
+      };
+    }
+  ));
 }
