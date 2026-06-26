@@ -183,4 +183,33 @@ more error-prone.
 
 ---
 
+## Purchase Atomicity
+
+A purchase must **debit the balance and grant the item together, or do
+neither.** This is enforced by executing all three operations inside a single
+database transaction (shared with the idempotency record):
+
+1. **Conditional debit:** `UPDATE accounts SET balance = balance - $price WHERE player_id = $1 AND balance >= $price RETURNING balance`
+2. **Inventory grant:** `INSERT INTO inventory (player_id, item_id, price) VALUES (...)`
+3. **Ledger entry:** `INSERT INTO ledger (player_id, delta, kind, reason) VALUES (...)`
+
+If step 1 returns 0 rows (insufficient funds), we skip steps 2-3 and return
+a `402 insufficient_funds` error. The idempotency record still stores this
+rejection — so a retry of a failed purchase replays the 402 without re-checking
+the balance (which may have changed since).
+
+**Why 402?** We chose HTTP 402 (Payment Required) for insufficient-funds
+rejections because it has the clearest semantic fit: the request is valid
+but cannot be fulfilled because the player doesn't have enough currency.
+This is a deliberate choice — alternatives like 400 (malformed request) or
+409 (conflict) don't describe the failure as precisely.
+
+**No partial state is possible:**
+- If the process crashes before COMMIT → Postgres rolls back all three
+  operations (debit, grant, and ledger) together.
+- If the process crashes after COMMIT → all three are durable, and the
+  idempotency record prevents re-execution.
+
+---
+
 *This document is updated incrementally as decisions are made and implemented.*
