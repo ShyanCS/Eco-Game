@@ -263,4 +263,63 @@ Every endpoint is protected by Zod schemas executed inside a Fastify `preHandler
 
 ---
 
+## Durability & Crash Recovery
+
+The service is designed to survive a `kill -9` at **any** moment with no data
+loss or corruption. Three mechanisms work together to guarantee this:
+
+### 1. PostgreSQL WAL (Write-Ahead Log)
+
+Postgres writes every committed transaction to the WAL **before** acknowledging
+the `COMMIT`. On restart after a crash, Postgres replays the WAL to restore
+all committed state. This is why we chose Postgres over embedded databases
+like SQLite — the client/server separation means an app crash cannot corrupt
+the database's own recovery log.
+
+### 2. All-or-Nothing Transactions
+
+Every mutating endpoint wraps **all** of its effects — balance change, inventory
+grant, ledger entry, and idempotency record — in a **single database
+transaction**. If the process dies before `COMMIT`:
+
+- Postgres rolls back the entire transaction on restart (WAL recovery).
+- The idempotency key is gone, the balance is unchanged, the inventory is
+  unmodified. A retry reprocesses cleanly as if the first attempt never happened.
+
+If the process dies **after** `COMMIT`:
+
+- All effects are durable. The idempotency key is `status='completed'`.
+- A retry finds the key and replays the cached response. No re-execution.
+
+**There is no window where a partial effect is visible** — this is the core
+durability guarantee.
+
+### 3. Named Docker Volume
+
+The `docker-compose.yml` declares a named volume (`pgdata`) for the Postgres
+data directory. This means:
+
+- `docker compose down && docker compose up` preserves all data.
+- `docker compose kill` + restart preserves all data.
+- Only an explicit `docker volume rm` wipes state.
+
+### Crash Recovery Test Strategy
+
+We verify durability at two levels:
+
+1. **Manual end-to-end** (`scripts/crash-test.sh`): Credits a player, makes a
+   purchase, `docker kill`s the app container, restarts, verifies the committed
+   data survived, retries the purchase with the same idempotency key, and
+   asserts no double-debit. This is the most honest proof because it exercises
+   the real Docker/Postgres recovery path.
+
+2. **Automated unit-level** (`test/durability.test.ts`): Simulates crash by
+   executing partial SQL inside a transaction then `ROLLBACK`ing (which is
+   exactly what Postgres does on `kill -9` before `COMMIT`). Verifies:
+   - No partial state (debit without grant) leaks.
+   - A rolled-back idempotency key allows clean reprocessing on retry.
+   - Committed ledger entries are consistent with the stored balance.
+
+---
+
 *This document is updated incrementally as decisions are made and implemented.*
