@@ -109,4 +109,37 @@ describe('POST /v1/wallets/:playerId/credit', () => {
     });
     expect(wallet.json().balance).toBe(100);
   });
+
+  it('should return 400 when Idempotency-Key header is missing', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v1/wallets/player-1/credit',
+      // No idempotency-key header
+      payload: { amount: 100, reason: 'battle_payout' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe('missing_idempotency_key');
+  });
+
+  it('should return 409 when same key is reused with different payload', async () => {
+    // First request
+    await server.inject({
+      method: 'POST',
+      url: '/v1/wallets/player-1/credit',
+      headers: { 'idempotency-key': 'reuse-key' },
+      payload: { amount: 100, reason: 'battle_payout' },
+    });
+
+    // Same key, different payload (different amount) — this is a client bug
+    const second = await server.inject({
+      method: 'POST',
+      url: '/v1/wallets/player-1/credit',
+      headers: { 'idempotency-key': 'reuse-key' },
+      payload: { amount: 200, reason: 'different_reason' },
+    });
+
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error.code).toBe('idempotency_key_reuse');
+  });
 });
