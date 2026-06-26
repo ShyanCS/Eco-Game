@@ -27,7 +27,7 @@ async function seedPlayer(playerId: string) {
     method: 'POST',
     url: `/v1/wallets/${playerId}/credit`,
     headers: { 'idempotency-key': `seed-${playerId}` },
-    payload: { amount: 0, reason: 'account_creation' },
+    payload: { amount: 1, reason: 'account_creation' },
   });
 }
 

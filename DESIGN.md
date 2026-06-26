@@ -244,4 +244,23 @@ By using `ON CONFLICT DO NOTHING` rather than letting the constraint throw a uni
 
 ---
 
+## Input Validation & Boundary Hardening
+
+We enforce strict validation at the API boundary to prevent malformed, oversized, or malicious payloads from entering our business logic and database layer.
+
+### Boundary Schema Validation (Zod)
+
+Every endpoint is protected by Zod schemas executed inside a Fastify `preHandler` hook. If validation fails, the hook immediately responds with a structured `400 validation_error` error response and terminates the request.
+
+- **String Constraints:** Player, Item, and Reward IDs are restricted to a length between 1 and 100 characters to prevent database bloating attacks.
+- **Integer Limits:** Credits and purchase prices must be positive integers strictly greater than zero (`int > 0`). To prevent numeric overflow attacks, we cap both at a maximum of `1,000,000,000` (1 billion).
+- **Schema Strictness:** We use Zod's `.strict()` parser on all request bodies to automatically reject requests containing extra or unknown fields.
+
+### Server-Level Safety
+
+- **Body Size Limit:** Fastify is configured with a strict `bodyLimit` of 10KB (10240 bytes). Any request exceeding this size is immediately rejected with a `413 payload_too_large` error before body parsing is attempted, protecting the service from large payload Denial of Service (DoS) attacks.
+- **Global Error Handler:** A custom Fastify error handler intercepts unexpected exceptions (such as JSON syntax errors or Fastify internal errors) and translates them into standard JSON error objects. This ensures no raw stack traces or internal details are leaked to clients.
+
+---
+
 *This document is updated incrementally as decisions are made and implemented.*

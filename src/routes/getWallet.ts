@@ -1,5 +1,7 @@
 import { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { query } from '../db.js';
+import { validate, playerIdSchema } from '../validation.js';
 
 /**
  * GET /v1/wallets/:playerId
@@ -10,7 +12,11 @@ import { query } from '../db.js';
 export async function getWalletRoute(server: FastifyInstance) {
   server.get<{
     Params: { playerId: string };
-  }>('/v1/wallets/:playerId', async (request, reply) => {
+  }>('/v1/wallets/:playerId', {
+    preHandler: validate({
+      params: z.object({ playerId: playerIdSchema }),
+    }),
+  }, async (request, reply) => {
     const { playerId } = request.params;
 
     // Fetch account balance

@@ -1,5 +1,7 @@
 import { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { withIdempotency } from '../idempotency.js';
+import { validate, creditBodySchema, playerIdSchema } from '../validation.js';
 
 /**
  * POST /v1/wallets/:playerId/credit
@@ -12,7 +14,12 @@ import { withIdempotency } from '../idempotency.js';
  * produce the same response without re-applying the credit.
  */
 export async function creditRoute(server: FastifyInstance) {
-  server.post('/v1/wallets/:playerId/credit', withIdempotency(
+  server.post('/v1/wallets/:playerId/credit', {
+    preHandler: validate({
+      body: creditBodySchema,
+      params: z.object({ playerId: playerIdSchema }),
+    }),
+  }, withIdempotency(
     'credit',
     async (request, _reply, client) => {
       const { playerId } = request.params as { playerId: string };

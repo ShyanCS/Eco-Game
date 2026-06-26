@@ -11,9 +11,40 @@ import { claimRoute } from './routes/claim.js';
  */
 export function buildServer(): FastifyInstance {
   const server = Fastify({
+    bodyLimit: 10240, // 10KB payload limit to prevent DoS
     logger: {
       level: process.env.LOG_LEVEL ?? 'info',
     },
+  });
+
+  // --- Global Error Handler ---
+  server.setErrorHandler((error, request, reply) => {
+    if (error.statusCode === 413 || error.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
+      return reply.status(413).send({
+        error: {
+          code: 'payload_too_large',
+          message: 'Request payload exceeds the maximum allowed size of 10KB',
+        },
+      });
+    }
+
+    if (error.statusCode === 400) {
+      return reply.status(400).send({
+        error: {
+          code: 'bad_request',
+          message: error.message || 'Malformed request body or parameters',
+        },
+      });
+    }
+
+    // Log the actual unexpected error
+    request.log.error(error);
+    return reply.status(500).send({
+      error: {
+        code: 'internal_server_error',
+        message: 'An unexpected error occurred on the server',
+      },
+    });
   });
 
   // --- Health check ---

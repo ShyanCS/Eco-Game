@@ -1,5 +1,7 @@
 import { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { withIdempotency } from '../idempotency.js';
+import { validate, purchaseBodySchema, playerIdSchema } from '../validation.js';
 
 /**
  * POST /v1/wallets/:playerId/purchase
@@ -14,7 +16,12 @@ import { withIdempotency } from '../idempotency.js';
  * the post-first-purchase balance. This is why READ COMMITTED is sufficient.
  */
 export async function purchaseRoute(server: FastifyInstance) {
-  server.post('/v1/wallets/:playerId/purchase', withIdempotency(
+  server.post('/v1/wallets/:playerId/purchase', {
+    preHandler: validate({
+      body: purchaseBodySchema,
+      params: z.object({ playerId: playerIdSchema }),
+    }),
+  }, withIdempotency(
     'purchase',
     async (request, _reply, client) => {
       const { playerId } = request.params as { playerId: string };

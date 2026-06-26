@@ -1,5 +1,7 @@
 import { type FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { withIdempotency } from '../idempotency.js';
+import { validate, claimBodySchema, rewardIdSchema } from '../validation.js';
 
 /**
  * POST /v1/rewards/:rewardId/claim
@@ -12,7 +14,12 @@ import { withIdempotency } from '../idempotency.js';
  * are rejected with a 409 already_claimed.
  */
 export async function claimRoute(server: FastifyInstance) {
-  server.post('/v1/rewards/:rewardId/claim', withIdempotency(
+  server.post('/v1/rewards/:rewardId/claim', {
+    preHandler: validate({
+      body: claimBodySchema,
+      params: z.object({ rewardId: rewardIdSchema }),
+    }),
+  }, withIdempotency(
     'claim',
     async (request, _reply, client) => {
       const { rewardId } = request.params as { rewardId: string };
