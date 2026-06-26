@@ -9,12 +9,13 @@ CREATE TABLE IF NOT EXISTS accounts (
 
 -- Append-only ledger for auditability (every balance change is recorded)
 CREATE TABLE IF NOT EXISTS ledger (
-  id         BIGSERIAL PRIMARY KEY,
-  player_id  TEXT NOT NULL REFERENCES accounts(player_id),
-  delta      BIGINT NOT NULL,
-  kind       TEXT NOT NULL,
-  reason     TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              BIGSERIAL PRIMARY KEY,
+  player_id       TEXT NOT NULL REFERENCES accounts(player_id),
+  delta           BIGINT NOT NULL,
+  kind            TEXT NOT NULL,
+  reason          TEXT,
+  idempotency_key TEXT UNIQUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Player inventory (items granted via purchases)

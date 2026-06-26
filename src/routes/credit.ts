@@ -37,11 +37,13 @@ export async function creditRoute(server: FastifyInstance) {
 
       const newBalance = parseInt(accountResult.rows[0].balance, 10);
 
+      const idempotencyKey = request.headers['idempotency-key'] as string;
+
       // Record in the append-only ledger
       await client.query(
-        `INSERT INTO ledger (player_id, delta, kind, reason)
-         VALUES ($1, $2, $3, $4)`,
-        [playerId, amount, 'credit', reason]
+        `INSERT INTO ledger (player_id, delta, kind, reason, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [playerId, amount, 'credit', reason, idempotencyKey]
       );
 
       return {

@@ -78,11 +78,13 @@ export async function purchaseRoute(server: FastifyInstance) {
         [playerId, itemId, price]
       );
 
+      const idempotencyKey = request.headers['idempotency-key'] as string;
+
       // Record in the append-only ledger
       await client.query(
-        `INSERT INTO ledger (player_id, delta, kind, reason)
-         VALUES ($1, $2, $3, $4)`,
-        [playerId, -price, 'purchase', `Purchased ${itemId}`]
+        `INSERT INTO ledger (player_id, delta, kind, reason, idempotency_key)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [playerId, -price, 'purchase', `Purchased ${itemId}`, idempotencyKey]
       );
 
       return {

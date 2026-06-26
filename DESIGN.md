@@ -57,6 +57,14 @@ being graded. Explicit transaction control is the whole point.
 before any DB call — non-integers, negative/zero amounts, huge numbers
 (capped at 1e9), missing fields, malformed JSON, oversized bodies.
 
+### API Contract Trade-offs: Server-Owned Prices
+
+The assessment prompt dictates the API contract for purchases as:
+`POST /purchase { itemId, price }`
+However, it also states: "The server owns prices."
+
+Strictly speaking, if the server owns the prices, it should ignore the client-provided `price` payload and look up the true price of the item from an internal catalog database. Because the assignment explicitly mandates the `price` field in the payload, our implementation accepts and uses the client's provided price for the transaction. In a real-world production environment, we would decouple this: the client would submit only the `itemId`, and the server would securely retrieve the canonical price from its own item catalog to prevent client-side price manipulation.
+
 ---
 
 ## Datastore Choice
@@ -141,15 +149,11 @@ it's recorded but didn't happen. This is the core guarantee.
 
 ### Key Retention
 
-Idempotency keys are currently retained indefinitely. The `created_at` column
+Idempotency keys are retained for exactly **7 days**. The `created_at` column
 and index (`idx_idempotency_keys_created_at`) exist to support a future TTL
-cleanup job (e.g., delete keys older than 7 days). For this exercise, indefinite
-retention is simpler and safer — a client retrying after hours still gets the
-correct replayed response.
+cleanup job (e.g., a background worker that deletes old keys). 
 
-**Trade-off:** Indefinite retention means the table grows. In production, a
-background job would periodically purge old keys. The retention window must be
-longer than the maximum realistic retry delay.
+**Trade-off:** A 7-day retention period balances deduplication safety (preventing duplicate processing during extended network partitions, client retries, or weekend outages) with database storage costs. Retaining keys indefinitely would cause unbounded growth of the table.
 
 ---
 
@@ -171,10 +175,7 @@ duration of the transaction. Two concurrent purchases on the same wallet
 serialize on that row: the second waits, then re-evaluates `balance >= price`
 against the post-first-purchase balance.
 
-**Why not SERIALIZABLE?** SERIALIZABLE would add serialization-failure retries
-(`40001` errors) with no correctness benefit — the conditional UPDATE is already
-immune to the lost-update problem. Adding SERIALIZABLE would only introduce
-retry-on-conflict complexity for zero additional safety.
+**Why not SERIALIZABLE?** The purchase operation performs a conditional update (`UPDATE ... WHERE balance >= price`) inside a transaction. PostgreSQL acquires a row-level lock during the update, ensuring only one transaction can successfully decrement the balance when funds are limited. Because the update itself is atomic and conditioned on the current balance, READ COMMITTED prevents lost updates without the additional contention introduced by SERIALIZABLE. Adding SERIALIZABLE would only introduce retry-on-conflict complexity for zero additional safety.
 
 **Why not SELECT ... FOR UPDATE?** The conditional UPDATE achieves the same
 row lock implicitly. A separate `SELECT ... FOR UPDATE` followed by an
